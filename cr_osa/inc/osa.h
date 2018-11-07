@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
-
+//#include <mcfw/interfaces/ti_media_std.h>
 
 #define OSA_DEBUG_MODE // enable OSA_printf, OSA_assert
 #define OSA_DEBUG_FILE // enable printf's during OSA_fileXxxx
@@ -38,10 +38,7 @@ typedef double            Double;
 typedef long double       LDouble;
 typedef void              Void;
 
-//typedef unsigned short    Bool;
-#ifndef Bool
-typedef unsigned short Bool;
-#endif
+typedef unsigned short    Bool;
 typedef void            * ptr;       /* data pointer */
 typedef char            * String;    /* null terminated string */
 //#define ptr ptr

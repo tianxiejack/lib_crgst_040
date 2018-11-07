@@ -8,6 +8,8 @@
 #include <osa_mutex.h>
 #include <osa_buf.h>
 
+using namespace cr_osa;
+
 enum {
 	memtype_default = 0,//memtype_glpbo
 	memtype_normal,

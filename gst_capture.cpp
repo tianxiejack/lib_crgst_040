@@ -483,7 +483,7 @@ int gstlinkInit_convert_enc_fakesink(RecordHandle *recordHandle)
 										"format", G_TYPE_STRING, pData->format,
 										"width", G_TYPE_INT, pData->width,
 										"height", G_TYPE_INT, pData->height,
-										"framerate", GST_TYPE_FRACTION, pData->framerate*2 ,
+										"framerate", GST_TYPE_FRACTION, pData->framerate ,
 										1,
 										 NULL);
 		/*printf("caps_src_to_convert = %s\n", gst_caps_to_string(pData->caps_src_to_convert));
@@ -504,7 +504,7 @@ int gstlinkInit_convert_enc_fakesink(RecordHandle *recordHandle)
 							"stream-format", G_TYPE_STRING, "byte-stream",
 							"width", G_TYPE_INT, pData->width,
 							"height", G_TYPE_INT, pData->height,
-							"framerate", GST_TYPE_FRACTION, pData->framerate*2, 1,
+							"framerate", GST_TYPE_FRACTION, pData->framerate, 1,
 							 NULL);
 
 	pData->videoconvert0 = gst_element_factory_make ("nvvidconv", NULL);
@@ -533,7 +533,7 @@ int gstlinkInit_convert_enc_fakesink(RecordHandle *recordHandle)
 		return (GstPadProbeReturn)-1;
 	}
 
-    g_object_set (pData->omxh265enc, "iframeinterval", pData->framerate*2, NULL);
+    g_object_set (pData->omxh265enc, "iframeinterval", pData->framerate, NULL);
     g_object_set (pData->omxh265enc, "bitrate", pData->bitrate, NULL);
 
     GstPad *h265enc_pad = gst_element_get_static_pad(pData->omxh265enc,"src");
@@ -544,6 +544,8 @@ int gstlinkInit_convert_enc_fakesink(RecordHandle *recordHandle)
 	gst_element_sync_state_with_parent (pData->videoconvert0);
     gst_element_sync_state_with_parent (pData->omxh265enc);
 	gst_element_sync_state_with_parent (pData->fakesink0);
+
+	g_print("\n\n%s gst starting ... \n\n", __func__);
 
 	/* Create gstreamer loop */
 	pData->loop = g_main_loop_new(NULL, FALSE);
@@ -641,7 +643,7 @@ int gstlinkInit_appsrc_enc_fakesink(RecordHandle *recordHandle)
     gst_element_sync_state_with_parent (pData->omxh265enc);
 	gst_element_sync_state_with_parent (pData->fakesink0);
 
-	//g_print("\n\ngst starting ...\n\n");
+	g_print("\n\n%s gst starting ... \n\n", __func__);
 
 	/* Create gstreamer loop */
 	pData->loop = g_main_loop_new(NULL, FALSE);
@@ -696,7 +698,7 @@ int gstlinkInit_convert_enc_rtp(RecordHandle *recordHandle)
 										"format", G_TYPE_STRING, pData->format,
 										"width", G_TYPE_INT, pData->width,
 										"height", G_TYPE_INT, pData->height,
-										"framerate", GST_TYPE_FRACTION, pData->framerate*2 ,
+										"framerate", GST_TYPE_FRACTION, pData->framerate ,
 										1,
 										 NULL);
 		printf("caps_src_to_convert = %s\n", gst_caps_to_string(pData->caps_src_to_convert));
@@ -717,7 +719,7 @@ int gstlinkInit_convert_enc_rtp(RecordHandle *recordHandle)
 							"stream-format", G_TYPE_STRING, "byte-stream",
 							"width", G_TYPE_INT, pData->width,
 							"height", G_TYPE_INT, pData->height,
-							"framerate", GST_TYPE_FRACTION, pData->framerate*2, 1,
+							"framerate", GST_TYPE_FRACTION, pData->framerate, 1,
 							 NULL);
 
 	pData->videoconvert0 = gst_element_factory_make ("nvvidconv", NULL);
@@ -754,7 +756,7 @@ int gstlinkInit_convert_enc_rtp(RecordHandle *recordHandle)
 		return (GstPadProbeReturn)-1;
 	}
 
-    g_object_set (pData->omxh265enc, "iframeinterval", pData->framerate*2, NULL);
+    g_object_set (pData->omxh265enc, "iframeinterval", pData->framerate, NULL);
     g_object_set (pData->omxh265enc, "bitrate", pData->bitrate, NULL);
     g_object_set (pData->rtph265pay, "config-interval", 1, NULL);
 	g_object_set (pData->udpsink, "host", pData->ip_addr, NULL);
@@ -770,7 +772,121 @@ int gstlinkInit_convert_enc_rtp(RecordHandle *recordHandle)
     gst_element_sync_state_with_parent (pData->rtph265pay);
 	gst_element_sync_state_with_parent (pData->udpsink);
 
-	g_print("\n\ngst starting ...\n\n");
+	g_print("\n\n%s gst starting ... %s: %d\n\n", __func__, pData->ip_addr, pData->port);
+
+	/* Create gstreamer loop */
+	pData->loop = g_main_loop_new(NULL, FALSE);
+	pData->ret = gst_element_set_state (pData->pipeline, GST_STATE_PLAYING);
+	if (pData->ret == GST_STATE_CHANGE_FAILURE)
+	{
+		g_printerr ("Unable to set the data.pipeline to the playing state.\n");
+		gst_object_unref (pData->pipeline);
+		return -1;
+	}
+
+  	/* Wait until error or EOS */
+	pData->bus = gst_element_get_bus(pData->pipeline);
+  	gst_bus_add_watch(pData->bus, bus_call, pData->loop);
+
+	return ret;
+}
+
+int gstlinkInit_appsrc_enc_rtp(RecordHandle *recordHandle)
+{
+	int ret =0;
+
+	CustomData* pData = (CustomData* )recordHandle->context;
+	if(pData == NULL)
+	{
+		printf("CustomData malloc failed.\n");
+		return -1;
+	}
+	//创建空的管道
+	char test_pipeline[16]={};
+	sprintf(test_pipeline,"test_pipeline_%d",recordHandle->index);
+	pData->pipeline = gst_pipeline_new (test_pipeline);
+
+  	//创建元件
+	g_assert(APPSRC == pData->capture_src );
+	{
+		pData->source = gst_element_factory_make ("appsrc", NULL);
+	}
+
+	pData->caps_src_to_convert = gst_caps_new_simple("video/x-raw",
+									"format", G_TYPE_STRING, pData->format,
+									"width", G_TYPE_INT, pData->width,
+									"height", G_TYPE_INT, pData->height,
+									"framerate", GST_TYPE_FRACTION, pData->framerate ,
+									1,
+									 NULL);
+	printf("caps_src_to_convert = %s\n", gst_caps_to_string(pData->caps_src_to_convert));
+	char * capsStr = g_strdup_printf("video/x-raw(memory:NVMM),width=(int)%d,height=(int)%d,alignment=(string)au,format=(string)I420,framerate=(fraction)%d/1,pixel-aspect-ratio=(fraction)1/1", pData->width, pData->height, pData->framerate);
+	pData->caps_nvconv_to_enc = gst_caps_from_string(capsStr);
+	g_free(capsStr);
+
+	g_object_set(G_OBJECT(pData->source), "caps", pData->caps_src_to_convert, NULL);
+	g_object_set(G_OBJECT(pData->source),
+				"stream-type", 0,
+				"is-live", TRUE,
+				//"block", TRUE,
+				"do-timestamp", TRUE,
+				"format", GST_FORMAT_TIME, NULL);
+
+	pData->caps_enc_to_rtp = gst_caps_new_simple("video/x-h265",
+							"stream-format", G_TYPE_STRING, "byte-stream",
+							"width", G_TYPE_INT, pData->width,
+							"height", G_TYPE_INT, pData->height,
+							"framerate", GST_TYPE_FRACTION, pData->framerate, 1,
+							 NULL);
+
+	pData->omxh265enc = gst_element_factory_make ("omxh265enc", NULL);
+	pData->rtph265pay = gst_element_factory_make("rtph265pay", NULL);
+	pData->udpsink = gst_element_factory_make("udpsink", NULL);
+
+	if (!pData->pipeline || !pData->source || !pData->omxh265enc || !pData->rtph265pay || !pData->udpsink)
+	{
+		g_printerr ("Not all elements could be created.\n");
+		return -1;
+    }
+
+	gst_bin_add_many (GST_BIN(pData->pipeline), pData->source, pData->omxh265enc,pData->rtph265pay, pData->udpsink,  NULL);
+	if(!gst_element_link_many(pData->source, pData->omxh265enc, NULL))
+	{
+		g_printerr ("Elements could not be linked:data.source->data0.omxh265enc.\n");
+		gst_object_unref (pData->pipeline);
+		return -1;
+	}
+
+    if(!gst_element_link_filtered(pData->omxh265enc, pData->rtph265pay, pData->caps_enc_to_rtp))
+	{
+		g_printerr ("Elements could not be linked.\n");
+		gst_object_unref (pData->pipeline);
+		return (GstPadProbeReturn)-1;
+	}
+
+    if(!gst_element_link_many(pData->rtph265pay, pData->udpsink, NULL))
+	{
+        g_printerr ("Elements could not be linked:data->rtph265pay ---> data->udpsink.\n");
+		gst_object_unref (pData->pipeline);
+		return (GstPadProbeReturn)-1;
+	}
+
+    g_object_set (pData->omxh265enc, "iframeinterval", pData->framerate, NULL);
+    g_object_set (pData->omxh265enc, "bitrate", pData->bitrate, NULL);
+    g_object_set (pData->rtph265pay, "config-interval", 1, NULL);
+	g_object_set (pData->udpsink, "host", pData->ip_addr, NULL);
+	g_object_set (pData->udpsink, "port", pData->port, NULL);
+
+    //GstPad *h265enc_pad = gst_element_get_static_pad(pData->omxh265enc,"src");
+    //gst_pad_add_probe (h265enc_pad, GST_PAD_PROBE_TYPE_BUFFER,(GstPadProbeCallback) enc_buffer, pData, NULL);
+    //gst_object_unref(h265enc_pad);
+
+	gst_element_sync_state_with_parent (pData->source);
+    gst_element_sync_state_with_parent (pData->omxh265enc);
+    gst_element_sync_state_with_parent (pData->rtph265pay);
+	gst_element_sync_state_with_parent (pData->udpsink);
+
+	g_print("\n\n%s gst starting ... %s: %d\n\n", __func__, pData->ip_addr, pData->port);
 
 	/* Create gstreamer loop */
 	pData->loop = g_main_loop_new(NULL, FALSE);
@@ -1000,20 +1116,20 @@ static void * thrdhndl_push_buffer_scheduler(void* arg)
 			GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(1, GST_SECOND, pData->framerate);
 			pData->buffer_timestamp+=GST_BUFFER_DURATION(buffer);
 
-			gst_buffer_unmap(buffer, info);
+			//gst_buffer_unmap(buffer, info);
 			gst_buffer_ref(buffer);
 			GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(pData->source), buffer);
 			if( ret != GST_FLOW_OK )
 			{
-				g_print("error: \n");
+				g_print("\n %s %d: gst_app_src_push_buffer error!\n", __func__, __LINE__);
 			}
-			gst_buffer_unref(buffer);
-			buffer = gst_buffer_new_allocate(NULL, bufInfo->size, NULL);
-			int iret = gst_buffer_map(buffer, info, GST_MAP_WRITE);
-			OSA_assert(iret != 0);
-			bufInfo->virtAddr = info->data;
-			bufInfo->physAddr = buffer;
-			bufInfo->resource = info;
+			//gst_buffer_unref(buffer);
+			//buffer = gst_buffer_new_allocate(NULL, bufInfo->size, NULL);
+			//int iret = gst_buffer_map(buffer, info, GST_MAP_WRITE);
+			//OSA_assert(iret != 0);
+			//bufInfo->virtAddr = info->data;
+			//bufInfo->physAddr = buffer;
+			//bufInfo->resource = info;
 
 			image_queue_putEmpty(&pData->pushBuffQueue, bufInfo);
 		}
@@ -1058,29 +1174,17 @@ static void * thrdhndl_push_buffer(void* arg)
 			break;
 		OSA_BufInfo* bufInfo = image_queue_getFull(&pData->pushBuffQueue);
 		if(bufInfo != NULL){
-			GstMapInfo *info = (GstMapInfo *)bufInfo->resource;
 			GstBuffer *buffer = (GstBuffer *)bufInfo->physAddr;
 			OSA_assert(buffer != NULL);
-
 			GST_BUFFER_PTS(buffer) = pData->buffer_timestamp;
 			GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(1, GST_SECOND, pData->framerate);
 			pData->buffer_timestamp+=GST_BUFFER_DURATION(buffer);
-
-			gst_buffer_unmap(buffer, info);
 			gst_buffer_ref(buffer);
 			GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(pData->source), buffer);
 			if( ret != GST_FLOW_OK )
 			{
-				g_print("error: \n");
+				g_print("\n %s %d: gst_app_src_push_buffer error!\n", __func__, __LINE__);
 			}
-			gst_buffer_unref(buffer);
-			buffer = gst_buffer_new_allocate(NULL, bufInfo->size, NULL);
-			int iret = gst_buffer_map(buffer, info, GST_MAP_WRITE);
-			OSA_assert(iret != 0);
-			bufInfo->virtAddr = info->data;
-			bufInfo->physAddr = buffer;
-			bufInfo->resource = info;
-
 			image_queue_putEmpty(&pData->pushBuffQueue, bufInfo);
 		}
 	    if(image_queue_fullCount(&pData->pushBuffQueue)>0){
@@ -1107,8 +1211,6 @@ int gstCapturePushData(RecordHandle *recordHandle, char *pbuffer , int datasize)
 	OSA_BufInfo* bufInfo = image_queue_getEmpty(&pData->pushBuffQueue);
 	if(bufInfo != NULL)
 	{
-		//GstMapInfo *info = (GstMapInfo *)bufInfo->resource;
-		//GstBuffer *buffer = (GstBuffer *)bufInfo->physAddr;
 		memcpy(bufInfo->virtAddr, pbuffer, datasize);
 		image_queue_putFull(&pData->pushBuffQueue, bufInfo);
 		OSA_semSignal(&pData->pushSem);
@@ -1194,9 +1296,12 @@ RecordHandle * gstCaptureInit( GstCapture_data gstCapture_data )
 	}
 
 	//res = rtp_main_init(recordHandle);  //初始化gstreamer.
-	if(gstCapture_data.ip_addr!=NULL)
-		res = gstlinkInit_convert_enc_rtp(recordHandle);
-	else
+	if(gstCapture_data.ip_addr!=NULL){
+		if(APPSRC == gstCapture_data.capture_src && strcmp(recordHandle->format, "I420") == 0)
+			res = gstlinkInit_appsrc_enc_rtp(recordHandle);
+		else
+			res = gstlinkInit_convert_enc_rtp(recordHandle);
+	}else
 	{
 		if(APPSRC == gstCapture_data.capture_src && strcmp(recordHandle->format, "I420") == 0)
 		{

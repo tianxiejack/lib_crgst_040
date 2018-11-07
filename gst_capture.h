@@ -4,6 +4,8 @@
 #include "osa_buf.h"
 #include "osa_sem.h"
 
+using namespace cr_osa;
+
 typedef int (*SendDataCallback)   (int dtype, unsigned char *buf, int size);
 
 
