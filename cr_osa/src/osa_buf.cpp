@@ -1,8 +1,10 @@
 
 
-#include <osa_buf.h>
+#include "osa_buf.h"
 #include <string.h>
 
+namespace cr_osa
+{
 int OSA_bufDelete(OSA_BufHndl *hndl)
 {
   int status=OSA_SOK;
@@ -203,4 +205,4 @@ if(mod==0)
 else
   return OSA_queGetQueuedCount(&hndl->emptyQue);
 }
-
+}

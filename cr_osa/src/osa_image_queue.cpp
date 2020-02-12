@@ -102,6 +102,9 @@ int image_queue_create(OSA_BufHndl *hndl, int nBuffers, size_t buffsize, int mem
 		}
 			break;
 		case memtype_null:
+			bufInit.bufVirtAddr[i] = malloc(buffsize);
+			OSA_assert(bufInit.bufVirtAddr[i] != NULL);
+			break;
 		default:
 			break;
 		}
