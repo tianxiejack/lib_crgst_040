@@ -18,7 +18,7 @@
 
 typedef struct _CustomData
 {
-  	GstElement *pipeline, *source, *videoconvert0, *tee0, *queue0, *fakesink0,*filesink;
+  	GstElement *pipeline, *source, *videoconvert0, *tee0, *queue0, *fakesink0,*filesink ,*qumux;
   	GstElement *queue1, *nvvidconv0, *omxh265enc, *fakesink1, *rtph265pay,*clockoverlay, *udpsink;
   	GstElement *queue3, *filesink2;
 
@@ -37,6 +37,8 @@ typedef struct _CustomData
 	GstPadTemplate *tee0_src_pad_template;
 	GstPad *tee0queue0_srcpad;
 	GstPad *tee0queue1_srcpad;
+
+	GstPad* qtmux;
 
 	int height;
 	int width;
@@ -701,15 +703,16 @@ int gstlinkInit_appsrc_enc_filesink(RecordHandle *recordHandle)
 				"do-timestamp", TRUE,
 				"format", GST_FORMAT_TIME, NULL);
 
-	pData->caps_enc_to_rtp = gst_caps_new_simple("video/x-h264",
+	pData->caps_enc_to_rtp = gst_caps_new_simple("video/x-h265",
 							"stream-format", G_TYPE_STRING, "byte-stream",
 							"width", G_TYPE_INT, pData->width,
 							"height", G_TYPE_INT, pData->height,
 							"framerate", GST_TYPE_FRACTION, pData->framerate, 1,
 							 NULL);
 
-	pData->omxh265enc = gst_element_factory_make ("omxh264enc", NULL);
+	pData->omxh265enc = gst_element_factory_make ("omxh265enc", NULL);
 	//pData->fakesink0  = gst_element_factory_make("fakesink", NULL);
+
 	pData->filesink  = gst_element_factory_make("filesink", NULL);
 
 	if (!pData->pipeline || !pData->source /*|| !pData->videoconvert0*/  )
@@ -726,7 +729,15 @@ int gstlinkInit_appsrc_enc_filesink(RecordHandle *recordHandle)
 		return -1;
 	}
 
-	g_object_set (G_OBJECT (pData->filesink), "location", "/home/nvidia/output.h264", NULL);
+	g_object_set (G_OBJECT (pData->filesink), "location", "/home/nvidia/test.mp4", NULL);
+
+//	if(!gst_element_link_many(pData->omxh265enc, pData->filesink,NULL))
+//	{
+//		g_printerr ("Elements could not be linked omxh265enc 2 qtmux.\n");
+//		gst_object_unref (pData->pipeline);
+//		return -1;
+//	}
+
     if(!gst_element_link_filtered(pData->omxh265enc, pData->filesink, pData->caps_enc_to_rtp))
 	{
 		g_printerr ("Elements could not be linked.\n");
@@ -1314,7 +1325,8 @@ int gstCapturePushData(RecordHandle *recordHandle, char *pbuffer , int datasize)
 	OSA_BufInfo* bufInfo = image_queue_getEmpty(&pData->pushBuffQueue);
 	if(bufInfo != NULL)
 	{
-		cudaMemcpy(bufInfo->virtAddr, pbuffer, datasize,cudaMemcpyDeviceToDevice);
+		cudaMemcpy(bufInfo->virtAddr, pbuffer, datasize,cudaMemcpyHostToHost);
+//		memcpy(bufInfo->virtAddr,pbuffer,datasize);
 		image_queue_putFull(&pData->pushBuffQueue, bufInfo);
 		OSA_semSignal(&pData->pushSem);
 	}
@@ -1324,6 +1336,7 @@ int gstCapturePushData(RecordHandle *recordHandle, char *pbuffer , int datasize)
 
 RecordHandle * gstCaptureInit( GstCapture_data gstCapture_data )
 {
+	printf("enter  gstCaptureInit !!!!!!!\n");
 	int res;
 	static int createNum = 0;
 	pthread_t thread_0;
@@ -1401,6 +1414,7 @@ RecordHandle * gstCaptureInit( GstCapture_data gstCapture_data )
 
 	//res = rtp_main_init(recordHandle);  //初始化gstreamer.
 	if(gstCapture_data.ip_addr!=NULL){
+		printf("!!!!!!!   1111111111111 \n");
 		if(APPSRC == gstCapture_data.capture_src && strcmp(recordHandle->format, "I420") == 0)
 			res = gstlinkInit_appsrc_enc_rtp(recordHandle);
 		else
@@ -1409,6 +1423,7 @@ RecordHandle * gstCaptureInit( GstCapture_data gstCapture_data )
 	{
 		if(APPSRC == gstCapture_data.capture_src && strcmp(recordHandle->format, "I420") == 0)
 		{
+			printf("!!!!!!!   create file pipeline \n");
 			//res = gstlinkInit_appsrc_enc_fakesink(recordHandle);
 			res = gstlinkInit_appsrc_enc_filesink(recordHandle);
 		}
