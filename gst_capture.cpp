@@ -21,6 +21,7 @@ typedef struct _CustomData
   	GstElement *pipeline, *source, *videoconvert0, *tee0, *queue0, *fakesink0,*filesink ,*qumux;
   	GstElement *queue1, *nvvidconv0, *omxh265enc, *fakesink1, *rtph265pay,*clockoverlay, *udpsink;
   	GstElement *queue3, *filesink2;
+  	GstElement* videosink ,  *h265parse ,*omxh265dec , *nvoverlaysink;
 
 	GstBus *bus;
 	GMainLoop *loop;
@@ -29,6 +30,7 @@ typedef struct _CustomData
 
 	GstStateChangeReturn ret;
 	GstCaps *caps_src_to_convert;
+	GstCaps *caps_YUYV_convert;
   	GstCaps *caps_enc_to_rtp;
   	GstCaps *caps_nvconv_to_enc;
 
@@ -711,7 +713,7 @@ int gstlinkInit_appsrc_enc_filesink(RecordHandle *recordHandle)
 							 NULL);
 
 	pData->omxh265enc = gst_element_factory_make ("omxh265enc", NULL);
-	//pData->fakesink0  = gst_element_factory_make("fakesink", NULL);
+	pData->nvvidconv0  = gst_element_factory_make("nvvidconv", NULL);
 
 	pData->filesink  = gst_element_factory_make("filesink", NULL);
 
@@ -721,7 +723,7 @@ int gstlinkInit_appsrc_enc_filesink(RecordHandle *recordHandle)
 		return -1;
     }
 
-	gst_bin_add_many (GST_BIN(pData->pipeline), pData->source,pData->omxh265enc, pData->filesink,  NULL);
+	gst_bin_add_many (GST_BIN(pData->pipeline), pData->nvvidconv0,pData->source,pData->omxh265enc, pData->filesink,  NULL);
 	if(!gst_element_link_many(pData->source, pData->omxh265enc, NULL))
 	{
 		g_printerr ("Elements could not be linked:data.source->data0.omxh265enc.\n");
@@ -731,19 +733,13 @@ int gstlinkInit_appsrc_enc_filesink(RecordHandle *recordHandle)
 
 	g_object_set (G_OBJECT (pData->filesink), "location", "/home/nvidia/test.mp4", NULL);
 
-//	if(!gst_element_link_many(pData->omxh265enc, pData->filesink,NULL))
-//	{
-//		g_printerr ("Elements could not be linked omxh265enc 2 qtmux.\n");
-//		gst_object_unref (pData->pipeline);
-//		return -1;
-//	}
-
-    if(!gst_element_link_filtered(pData->omxh265enc, pData->filesink, pData->caps_enc_to_rtp))
+   if(!gst_element_link_filtered(pData->omxh265enc, pData->filesink, pData->caps_enc_to_rtp))
 	{
 		g_printerr ("Elements could not be linked.\n");
 		gst_object_unref (pData->pipeline);
 		return (GstPadProbeReturn)-1;
 	}
+
 
     g_object_set (pData->omxh265enc, "iframeinterval", pData->framerate, NULL);
     g_object_set (pData->omxh265enc, "bitrate", pData->bitrate, NULL);
